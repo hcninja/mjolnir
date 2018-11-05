@@ -9,13 +9,14 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/dgrijalva/jwt-go"
 )
 
 func main() {
 	jwtFlag := flag.String("jwt", "", "The JWT token")
-	dicFlag := flag.String("dic", "", "The password dictionary")
+	dicFlag := flag.String("dict", "", "The password dictionary")
 	flag.Parse()
 
 	log.SetOutput(os.Stdout)
@@ -56,6 +57,8 @@ func main() {
 	passwds := strings.Split(string(file), "\n")
 
 	// Bruteforce the password
+	then := time.Now()
+
 	var passOk string
 	log.Println("[*] Starting bruteforce, this can be slow, be patient")
 	for _, pwd := range passwds {
@@ -65,10 +68,11 @@ func main() {
 		}
 	}
 
+	now := time.Now().Sub(then).String()
 	if passOk != "" {
-		log.Printf("[!] Key found: %s", passOk)
+		log.Printf("[!] Key found in %s, the key is %s", now, passOk)
 	} else {
-		log.Println("[!] Password not found :(")
+		log.Printf("[!] Password not found after running for %s :(", now)
 	}
 }
 
@@ -77,9 +81,5 @@ func hs256Calculator(payload, signature, password []byte) bool {
 	mac.Write(payload)
 	newhmac := mac.Sum(nil)
 
-	if bytes.Compare(signature, newhmac) == 0 {
-		return true
-	}
-
-	return false
+	return bytes.Compare(signature, newhmac) == 0
 }
