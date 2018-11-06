@@ -2,8 +2,8 @@ package main
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/hmac"
-	"crypto/sha256"
 	"flag"
 	"io/ioutil"
 	"log"
@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buger/jsonparser"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/fatih/color"
 )
@@ -70,15 +71,34 @@ func main() {
 		}
 		passwds := strings.Split(string(file), "\n")
 
+		alg, err := getSignMode(header)
+		if err != nil {
+			log.Printf(red("[!]") + err.Error())
+			return
+		}
+
 		// Bruteforce the password
 		then := time.Now()
 
 		var passOk string
 		log.Println(yellow("[*]") + " Starting bruteforce, this can be slow, be patient")
 		for _, pwd := range passwds {
-			if hs256Calculator([]byte(payload), signature, []byte(pwd)) {
-				passOk = pwd
-				break
+			switch alg {
+			case "hs256":
+				if hs256Calculator([]byte(payload), signature, []byte(pwd)) {
+					passOk = pwd
+					break
+				}
+			case "hs384":
+				if hs384Calculator([]byte(payload), signature, []byte(pwd)) {
+					passOk = pwd
+					break
+				}
+			case "hs512":
+				if hs512Calculator([]byte(payload), signature, []byte(pwd)) {
+					passOk = pwd
+					break
+				}
 			}
 		}
 
@@ -100,8 +120,29 @@ func main() {
 	log.Println(red("[!]") + " No attack specified")
 }
 
+func getSignMode(header []byte) (string, error) {
+	alg, err := jsonparser.GetString(header, "alg")
+	return strings.ToLower(string(alg)), err
+}
+
 func hs256Calculator(payload, signature, password []byte) bool {
-	mac := hmac.New(sha256.New, password)
+	mac := hmac.New(crypto.SHA256.New, password)
+	mac.Write(payload)
+	newhmac := mac.Sum(nil)
+
+	return bytes.Compare(signature, newhmac) == 0
+}
+
+func hs384Calculator(payload, signature, password []byte) bool {
+	mac := hmac.New(crypto.SHA3_384.New, password)
+	mac.Write(payload)
+	newhmac := mac.Sum(nil)
+
+	return bytes.Compare(signature, newhmac) == 0
+}
+
+func hs512Calculator(payload, signature, password []byte) bool {
+	mac := hmac.New(crypto.SHA3_512.New, password)
 	mac.Write(payload)
 	newhmac := mac.Sum(nil)
 
